@@ -6,6 +6,7 @@ pandas>=2.0.0
 
 # Networking & Notifications
 requests>=2.31.0
+python-dotenv>=1.0.0
 
 # Optional: If you decide to use a more advanced Telegram wrapper later
 # python-telegram-bot>=20.0
