@@ -33,13 +33,14 @@ def run_omni_channel_search():
         print(f"Scouting {query}...")
         try:
             jobs = scrape_jobs(
-                site_name=["linkedin", "indeed", "glassdoor", "google"],
-                search_term=query,
-                location="Bengaluru, India",
-                results_wanted=15, # Keeping it lean for speed
-                hours_old=24, 
-                country_seniority_filter="entry_level"
-            )
+    site_name=["linkedin", "indeed"], # Skip Glassdoor for now to avoid the 400 errors
+    search_term="Data Analyst", # A slightly broader term
+    location=["Bengaluru, India", "Hyderabad", "Remote", "Pune"],
+    results_wanted=20,
+    hours_old=72, # Look back 3 days to ensure we catch everything
+    is_remote=False,
+    job_type=['fulltime', 'internship', 'entry-level'], # Catch entry-level roles too
+)
             all_jobs.append(jobs)
         except Exception as e:
             print(f"Error scouting {query}: {e}")
