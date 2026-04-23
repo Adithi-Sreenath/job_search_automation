@@ -3,46 +3,46 @@ from jobspy import scrape_jobs
 from datetime import datetime
 from notifier import send_telegram_msg
 
-# ✅ Seniority blacklist — drop anything that looks senior/mid-level
 SENIORITY_BLACKLIST = [
     "senior", "sr.", "sr ", "lead", "principal", "staff", "manager",
     "director", "head of", "vp ", "vice president",
-    "ii", "iii", "iv", "2", "3",          # "Data Engineer II", "Analyst 2"
-    "experienced", "mid-level", "5+ years", "7+ years", "8+ years"
+    " ii", " iii", " iv", " 2", " 3",
+    "experienced", "mid-level"
 ]
 
-# ✅ Role blacklist — non-technical / BPO / irrelevant
 ROLE_BLACKLIST = [
     "support", "kyc", "verification", "customer service",
-    "voice", "bpo", "telecall", "sales", "marketing"
+    "voice", "bpo", "telecall"
 ]
 
-# ✅ Entry-level signal whitelist — title must contain at least one of these
-ENTRY_LEVEL_SIGNALS = [
-    "junior", "jr", "associate", "intern", "trainee",
-    "entry", "fresher", "graduate", "assistant", "apprentice"
-]
-
-# ✅ Tech stack must appear in description
 TECH_KEYWORDS = [
     "SQL", "Python", "Power BI", "Tableau", "Data Analysis",
-    "Data Science", "ETL", "Dashboard", "Machine Learning", "Excel"
+    "Data Science", "ETL", "Dashboard", "Machine Learning",
+    "Analytics", "Excel", "Looker", "Spark", "BigQuery"
 ]
 
 def is_entry_level(title: str) -> bool:
     title_lower = title.lower()
-
-    # Hard reject if any seniority word found
     if any(word in title_lower for word in SENIORITY_BLACKLIST):
         return False
+    return True  # neutral titles like "Data Analyst" are fine
 
-    # Accept if any entry-level signal found
-    if any(word in title_lower for word in ENTRY_LEVEL_SIGNALS):
-        return True
 
-    # For neutral titles like "Data Analyst" (no junior/senior) — allow through
-    # These are often genuinely open to freshers in India
-    return True
+def is_technical(row) -> bool:
+    """Check title AND description — description is often None on scraped jobs."""
+    title = str(row.get("title", ""))
+    description = str(row.get("description", ""))
+
+    # Title alone is enough — "Data Analyst" is inherently technical
+    title_is_technical = any(
+        kw.lower() in title.lower() for kw in TECH_KEYWORDS + [
+            "analyst", "engineer", "scientist", "intelligence", "analytics"
+        ]
+    )
+    # Description is a bonus check, not a hard requirement
+    desc_is_technical = any(kw.lower() in description.lower() for kw in TECH_KEYWORDS)
+
+    return title_is_technical or desc_is_technical  # ✅ OR not AND
 
 
 def run_omni_channel_search():
@@ -57,9 +57,9 @@ def run_omni_channel_search():
         "Associate Product Analyst",
         "Growth Analyst",
         "Decision Science Associate",
-        "Quantitative Analyst fresher",
+        "Quantitative Analyst",
         "Analytics Trainee",
-        "Data Analyst fresher",           # ← "fresher" keyword helps on Indian job boards
+        "Data Analyst fresher",
         "Entry Level Data Analyst",
     ]
 
@@ -81,6 +81,7 @@ def run_omni_channel_search():
                 )
                 if jobs is not None and not jobs.empty:
                     all_jobs.append(jobs)
+                    print(f"  → {len(jobs)} found")
             except Exception as e:
                 print(f"  ⚠️ Error for '{query}' in {location}: {e}")
 
@@ -89,23 +90,22 @@ def run_omni_channel_search():
         return
 
     df = pd.concat(all_jobs).drop_duplicates(subset=["job_url"])
-    print(f"Raw jobs after dedup: {len(df)}")
+    print(f"\nRaw after dedup:         {len(df)}")
 
-    # ── FILTER 1: Drop role blacklist (BPO, support etc.) ──────────────────
+    # Filter 1 — BPO / support roles
     df = df[~df["title"].str.contains("|".join(ROLE_BLACKLIST), case=False, na=False)]
+    print(f"After role blacklist:     {len(df)}")
 
-    # ── FILTER 2: Drop senior/mid-level by title ────────────────────────────
+    # Filter 2 — Seniority (title only)
     df = df[df["title"].apply(is_entry_level)]
-    print(f"After seniority filter: {len(df)}")
+    print(f"After seniority filter:   {len(df)}")
 
-    # ── FILTER 3: Must mention technical stack in description ───────────────
-    df["is_technical"] = df["description"].str.contains(
-        "|".join(TECH_KEYWORDS), case=False, na=False
-    )
+    # Filter 3 — Technical (title OR description, not just description)
+    df["is_technical"] = df.apply(is_technical, axis=1)
     final_list = df[df["is_technical"]].copy()
-    print(f"✅ Final qualified fresher roles: {len(final_list)}")
+    print(f"After technical filter:   {len(final_list)}")
+    print(f"\n✅ Sending {len(final_list)} roles to Telegram")
 
-    # ── OUTPUT ───────────────────────────────────────────────────────────────
     date_str = datetime.now().strftime("%Y-%m-%d")
     filename = f"Daily_Hunt_{date_str}.csv"
     final_list[["title", "company", "location", "job_url", "date_posted"]].to_csv(
