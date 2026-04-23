@@ -2,7 +2,9 @@
 import pandas as pd
 from jobspy import scrape_jobs
 from datetime import datetime
+from notifier import send_telegram_msg
 import requests
+
 
 def run_omni_channel_search():
     # 1. Target Titles (Strictly Entry Level / No Experience)
@@ -69,6 +71,8 @@ def run_omni_channel_search():
     print("\n--- Manual Check Niche Boards ---")
     print("Wellfound: https://wellfound.com/jobs?role=Data+Analyst&location=Bengaluru&experience=0-1")
     print("Instahyre: https://www.instahyre.com/jobs-in-bangalore/?skills=SQL,Python&exp=0")
+    # 6. Trigger Notification
+    send_telegram_msg(final_list)
 
 # Run the system
 if __name__ == "__main__":
