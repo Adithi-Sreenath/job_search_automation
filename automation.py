@@ -1,80 +1,77 @@
-# pip install python-jobspy pandas requests
 import pandas as pd
 from jobspy import scrape_jobs
 from datetime import datetime
 from notifier import send_telegram_msg
-import requests
-
 
 def run_omni_channel_search():
-    # 1. Target Titles (Strictly Entry Level / No Experience)
-    # FIXED: Added missing commas and corrected "Quantitative"
     queries = [
-        "Strategy and Operations Analyst", 
+        "Strategy and Operations Analyst",
         "Associate Product Analyst",
         "Decision Science Associate",
         "Junior Data Scientist",
         "Analytics Engineer Trainee",
-        "Product operations analyst",
-        "junior data engineer",
-        "Associate data analyst", # Fixed missing comma
-        "data analyst intern",
+        "Product Operations Analyst",
+        "Junior Data Engineer",
+        "Associate Data Analyst",
+        "Data Analyst Intern",
         "Associate Business Intelligence",
-        "Business Intelligence intern",
-        "junior data analyst",
-        "Quantitative Analyst", # Fixed typo
-        "Growth analyst"
+        "Business Intelligence Intern",
+        "Junior Data Analyst",
+        "Quantitative Analyst",
+        "Growth Analyst"
     ]
-    
+
+    locations = ["Bengaluru, India", "Hyderabad, India", "Pune, India"]
+
     all_jobs = []
-    
-    # 2. Scrape Aggregators (LinkedIn, Indeed, Glassdoor, Google Jobs)
+
     for query in queries:
-        print(f"Scouting {query}...")
-        try:
-            jobs = scrape_jobs(
-    site_name=["linkedin", "indeed"], # Skip Glassdoor for now to avoid the 400 errors
-    search_term="Data Analyst", # A slightly broader term
-    location=["Bengaluru, India", "Hyderabad", "Remote", "Pune"],
-    results_wanted=20,
-    hours_old=72, # Look back 3 days to ensure we catch everything
-    is_remote=False,
-    job_type=['fulltime', 'internship', 'entry-level'], # Catch entry-level roles too
-)
-            all_jobs.append(jobs)
-        except Exception as e:
-            print(f"Error scouting {query}: {e}")
+        for location in locations:
+            print(f"Scraping '{query}' in {location}...")
+            try:
+                jobs = scrape_jobs(
+                    site_name=["linkedin", "indeed"],
+                    search_term=query,           # ✅ FIX 1: Use the loop variable
+                    location=location,           # ✅ FIX 2: Single string, not a list
+                    results_wanted=15,
+                    hours_old=72,
+                    country_indeed="India",      # ✅ FIX 3: Target India on Indeed
+                    # Removed: is_remote, job_type (unreliable params)
+                )
+                if jobs is not None and not jobs.empty:
+                    all_jobs.append(jobs)
+            except Exception as e:
+                print(f"  ⚠️ Error for '{query}' in {location}: {e}")
 
     if not all_jobs:
         print("No jobs found in this run.")
         return
 
-    df = pd.concat(all_jobs).drop_duplicates(subset=['job_url'])
+    df = pd.concat(all_jobs).drop_duplicates(subset=["job_url"])
+    print(f"Total raw jobs after dedup: {len(df)}")
 
-    # 3. Apply the "Engineering" Filter (Excluding Support/KYC/BPO)
-    # Added "telecall" and "voice" to keep it strictly technical
+    # Filter out non-technical / BPO / support roles
     blacklist = ["support", "kyc", "verification", "customer service", "voice", "bpo", "telecall"]
-    df = df[~df['title'].str.contains('|'.join(blacklist), case=False, na=False)]
+    df = df[~df["title"].str.contains("|".join(blacklist), case=False, na=False)]
 
-    # 4. Filter for Technical Stack (Ensures you don't get 'Excel-only' roles)
-    tech_filter = ["SQL", "Python", "Power BI", "Models", "Data Analysis", "Data Science", "Data Engineer", "ETL", "Dashboards"]
-    df['is_technical'] = df['description'].str.contains('|'.join(tech_filter), case=False, na=False)
-    final_list = df[df['is_technical'] == True]
+    # Filter for technical stack mentions in description
+    tech_keywords = ["SQL", "Python", "Power BI", "Tableau", "Data Analysis",
+                     "Data Science", "Data Engineer", "ETL", "Dashboard", "Machine Learning"]
+    df["is_technical"] = df["description"].str.contains("|".join(tech_keywords), case=False, na=False)
+    final_list = df[df["is_technical"]]
 
-    # 5. Generate Output
-    print(f"Done! Found {len(final_list)} fresh technical roles.")
-    
-    date_str = datetime.now().strftime('%Y-%m-%d')
+    print(f"✅ Found {len(final_list)} qualified technical roles.")
+
+    date_str = datetime.now().strftime("%Y-%m-%d")
     filename = f"Daily_Hunt_{date_str}.csv"
-    final_list[['title', 'company', 'job_url']].to_csv(filename, index=False)
-    
-    # 6. Summary of Niche Boards (Manual Check needed for these)
-    print("\n--- Manual Check Niche Boards ---")
-    print("Wellfound: https://wellfound.com/jobs?role=Data+Analyst&location=Bengaluru&experience=0-1")
-    print("Instahyre: https://www.instahyre.com/jobs-in-bangalore/?skills=SQL,Python&exp=0")
-    # 6. Trigger Notification
+    final_list[["title", "company", "location", "job_url", "date_posted"]].to_csv(filename, index=False)
+    print(f"Saved to {filename}")
+
+    print("\n--- Also check these niche boards manually ---")
+    print("Wellfound:  https://wellfound.com/jobs?role=Data+Analyst&location=Bengaluru&experience=0-1")
+    print("Instahyre:  https://www.instahyre.com/jobs-in-bangalore/?skills=SQL,Python&exp=0")
+
     send_telegram_msg(final_list)
 
-# Run the system
 if __name__ == "__main__":
     run_omni_channel_search()
