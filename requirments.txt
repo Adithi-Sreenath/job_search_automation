@@ -1,0 +1,11 @@
+# Core Scraping & Aggregation
+python-jobspy>=1.1.82
+
+# Data Processing
+pandas>=2.0.0
+
+# Networking & Notifications
+requests>=2.31.0
+
+# Optional: If you decide to use a more advanced Telegram wrapper later
+# python-telegram-bot>=20.0
